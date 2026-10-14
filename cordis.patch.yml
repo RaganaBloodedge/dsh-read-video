@@ -1,0 +1,13 @@
+# dsh-read-video 的 bundle 层。
+# 发布成 npm 包后，用户 profile 里引用的是包名（而不是绝对路径）：
+#   dsh plugin --profile web add dsh-read-video
+# 自检：dsh --profile web --dump-config   （出现 "# == dsh-read-video" 层即挂载成功）
+#
+# 顶层必须是「patch 操作序列」，写成裸 `insert:` 映射会被静默忽略。
+- insert:
+    - id: read-video
+      name: dsh-read-video
+      config:
+        ffmpegPath: null      # 留空 = 自动发现
+        cacheDir: null        # 留空 = <cwd>/.read-video-cache
+        asrProvider: local    # local | cloud
