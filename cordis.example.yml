@@ -1,0 +1,53 @@
+# dsh 挂载清单模板。
+#
+# 这个文件叫 example 而不是直接用，是因为 dsh 要求 `name` 写【本机绝对路径】：
+# 相对路径会被静默忽略，绝对路径又换不了机器。复制一份，把 <REPO> / <PYTHON>
+# 换成你自己的路径再用。
+#
+# 用法（只组合配置、不启动，最快自检）：
+#   dsh --profile web --patch "<改好的文件>" --dump-config
+# 用法（真启动 web 端）：
+#   dsh --profile web --patch "<改好的文件>"
+# desktop app 用不了 --patch（profile 被 Electron 独占管理），
+# 要把下面的 `- insert:` 块粘进 ~/.dsh/profiles/desktop/cordis.patch.yml，再重启 app。
+#
+# 硬规矩（都是实测踩出来的，违反不报错、只是不生效）：
+#   1. 顶层必须是 patch 数组，条目一律包在 `insert:` 里。
+#      写成裸 `- id: x` + `name:` 会被判 `patch: entry "x" not found` 直接跳过。
+#   2. name 用本机绝对路径；相对路径静默失败。dump 后会被规范化成 file:///...
+#   3. 两种形态功能重叠：同时开启会向模型暴露两套同名工具，因此默认只开插件形态。
+
+- insert:
+    # ── 形态 A：dsh 原生插件 ──────────────────────────────────────────
+    # 能注入 dsh 内部服务：
+    #   ctx.tools        -> register(defineTool(...)) 注册工具
+    #   ctx.attachments  -> saveImage({data, mediaType}) 帧入库，
+    #                       render 返回 {type:'image', attachment} 让模型真看图
+    #   ctx.speechToText -> transcribe({audio: WAV bytes, language}) 本地 SenseVoice 转写
+    #   ctx.web          -> fetch({url}) 只 html/text（无二进制，拿不到视频本体）
+    # 前提：本仓库要先 `npm install` —— dsh 不会把 @deepseek-ai/* 解析到自己
+    #       的安装目录，插件必须自带 node_modules。
+    - id: read-video
+      name: "<REPO>/src/index.ts"
+      config:
+        ffmpegPath: null      # 留空 = 自动发现
+        cacheDir: null        # 留空 = <cwd>/.read-video-cache
+        asrProvider: local    # local | cloud
+
+    # ── 形态 B：MCP server（尚未实现，占位）───────────────────────────
+    # 任何支持 MCP 的客户端都能接；在 dsh 里由 @deepseek-ai/dsh-mcp-client 托管，
+    # 一个实例连一个 server，工具以 mcp__readvideo__<名字> 暴露给模型。
+    # serverName 必须匹配 [A-Za-z0-9_-]{1,32} 且在存活的实例中唯一。
+    # 优点：不依赖 profile 的 node 依赖，desktop app 下最省事。
+    # 代价：拿不到 ctx.attachments / ctx.speechToText，帧图片与 ASR 都得服务端自带。
+    - id: mcp-readvideo
+      disabled: true
+      name: "@deepseek-ai/dsh-mcp-client"
+      config:
+        transport: stdio
+        serverName: readvideo
+        command: "<PYTHON>/python.exe"
+        args: ["-m", "readvideo_mcp"]
+        cwd: "<REPO>/mcp"
+        toolCallTimeoutMs: 120000
+        failOnStartupError: false
