@@ -1,4 +1,4 @@
-// dsh-read-video —— DeepSeek Harness 插件入口（骨架版：先只有 video_probe）。
+// dsh-readvideo —— DeepSeek Harness 插件入口（骨架版：先只有 video_probe）。
 //
 // 职责很窄：把"按需取字节理解视频"的能力暴露成模型可调用的工具。
 // 重的逻辑（Range 取数、容器索引解析、ffmpeg 解帧、拼图）后续放进 src/video/，
@@ -7,7 +7,8 @@
 // 本地开发：  照 cordis.example.yml 填好绝对路径，再
 //             dsh --profile web --patch "<填好的清单>"
 // 持久挂载：  把清单里的 `- insert:` 块粘进 ~/.dsh/profiles/<name>/cordis.patch.yml
-// 发布：      package.json 里声明 dsh.bundle，仓库打 dsh-plugin topic
+// 发布：      发到 npm registry 后，在 dsh 的插件页输入包名 dsh-readvideo 即可安装
+//             （管理器会读 package.json 的 dsh.bundle.patch 自动写 profile 配置）
 //
 // 两条硬规矩（违反了不报错，只是行为诡异）：
 //   1. 只用具名导出，绝不 export default —— 默认导出会让加载器丢掉 inject 等元数据；
@@ -16,7 +17,7 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 
-export const name = 'dsh-read-video';
+export const name = 'dsh-readvideo';
 
 /** 依赖的服务槽：框架会先备好 ctx.tools，再调用 apply */
 export const inject = ['tools'];

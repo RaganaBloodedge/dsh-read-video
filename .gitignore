@@ -19,3 +19,7 @@ cordis.yml
 *.tmp
 .DS_Store
 Thumbs.db
+
+# 参考用的第三方插件源码与压缩包（只是拿来照着学发布方式，不属于本项目）
+dsh-mnemon-main/
+dsh-mnemon-main.zip

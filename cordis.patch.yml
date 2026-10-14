@@ -1,13 +1,13 @@
-# dsh-read-video 的 bundle 层。
-# 发布成 npm 包后，用户 profile 里引用的是包名（而不是绝对路径）：
-#   dsh plugin --profile web add dsh-read-video
-# 自检：dsh --profile web --dump-config   （出现 "# == dsh-read-video" 层即挂载成功）
+# 把 dsh-readvideo 挂进一个 DSH profile。
+# 安装后由插件管理器把下面这条 insert 行自动写进 profile 的 cordis.patch.yml，
+# 因此用户不需要手写任何配置；行里的 name 是包名，从 profile 的 node_modules 解析。
 #
+# 手工核对：dsh --profile <profile> --dump-config   （出现 "# == dsh-readvideo" 层即已挂载）
 # 顶层必须是「patch 操作序列」，写成裸 `insert:` 映射会被静默忽略。
 - insert:
     - id: read-video
-      name: dsh-read-video
+      name: dsh-readvideo
       config:
-        ffmpegPath: null      # 留空 = 自动发现
+        ffmpegPath: null      # 留空 = 自动从 imageio-ffmpeg / PATH 发现
         cacheDir: null        # 留空 = <cwd>/.read-video-cache
         asrProvider: local    # local | cloud

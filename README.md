@@ -1,4 +1,7 @@
-# dsh-read-video
+# dsh-readvideo
+
+> npm 包名是 `dsh-readvideo`，仓库名是 `dsh-read-video`。在 dsh 的插件页输入包名即可安装，
+> 见「安装 · 方式一」。
 
 DeepSeek Harness 插件：让模型"看"视频，但不把视频下载下来。
 
@@ -80,7 +83,27 @@ DeepSeek Harness 插件：让模型"看"视频，但不把视频下载下来。
 
 ## 安装
 
-### 前置：插件必须自带依赖
+### 方式一：从 npm 装（推荐）
+
+桌面应用 → 插件页 → 添加插件 → 填 `dsh-readvideo` → 重启。
+
+管理器做的事：`pnpm add dsh-readvideo` → 把它加进 profile 的 `dsh.profile.bundles` →
+包自带的 `cordis.patch.yml` 作为 **bundle 层自动生效**。用户不用手写任何配置，装完的形态：
+
+```
+~/.dsh/profiles/desktop/
+├── package.json                      # dependencies 与 dsh.profile.bundles 各多一行
+├── cordis.patch.yml                  # 不用动
+└── node_modules/dsh-readvideo/
+    ├── cordis.patch.yml              # 挂载条目来自这里
+    └── dist/index.js                 # 入口
+```
+
+**这个形态下插件不需要自带 `node_modules`** —— `@deepseek-ai/*` 那类 peer 由宿主自己解析
+（`dsh-mnemon` 同样只声明 peer，装成包照跑）。已实测：把本包的 tarball 用桌面自带的 pnpm
+装进一个干净 profile，启动日志零告警，`--dump-config` 里 `read-video` 恰好出现一次。
+
+### 本地挂载才需要插件自带依赖
 
 ```bash
 git clone https://github.com/RaganaBloodedge/dsh-read-video.git
@@ -88,10 +111,10 @@ cd dsh-read-video
 npm install
 ```
 
-`npm install` 不能省。dsh **不会**把 `@deepseek-ai/*` 解析到自己的安装目录，插件自带
-`node_modules` 才行。漏了这步，dsh 启动日志只会给一句不含原因的
-`read-video: failed to import` —— 真原因得单独 import 才看得到，是
-`ERR_MODULE_NOT_FOUND: Cannot find package '@deepseek-ai/dsh-tools'`。
+**用绝对路径挂载**（`--patch`，或把条目写进 profile 的 `cordis.patch.yml`）时，入口文件在
+`node_modules` 之外，Node 找不到 `@deepseek-ai/*`，所以插件必须自带 `node_modules`。
+漏了这步，启动日志只给一句不含原因的 `read-video (file:///...): failed to import` ——
+真原因要单独 import 才看得到：`ERR_MODULE_NOT_FOUND: Cannot find package '@deepseek-ai/dsh-tools'`。
 
 `npm install` 会顺带跑 `prepare`（即 `tsc`），产出 `dist/`。
 
@@ -115,7 +138,7 @@ Stripping types is currently unsupported for files under node_modules
 `dist/` 进了仓库，所以从 GitHub 装下来不用自己编译也能跑；`prepare` 脚本则在
 `npm install` 和 git 依赖场景下重新生成一份。两条都留着是为了少一个失败点。
 
-### 方式一：桌面应用
+### 方式二：绝对路径挂载进 profile（含桌面应用）
 
 把 `cordis.example.yml` 里的 `- insert:` 块粘进
 `~/.dsh/profiles/desktop/cordis.patch.yml`，把 `<REPO>` 换成本仓库的绝对路径，
@@ -126,7 +149,7 @@ desktop profile 被 Electron 独占管理，`dsh --profile desktop --dump-config
 另外 desktop profile 目前没有 `node_modules`，如果挂载时报 `failed to import`，
 得先让 profile 能解析到本插件的依赖。
 
-### 方式二：本地开发（CLI）
+### 方式三：本地开发（CLI，改代码即生效）
 
 ```bash
 cp cordis.example.yml cordis.local.yml     # 先把里面的 <REPO> 换成绝对路径
@@ -136,7 +159,7 @@ dsh --profile web --patch "<cordis.local.yml 的绝对路径>"                 #
 
 `--dump-config` 输出里出现 `- id: read-video` 就是组合成功。
 
-### 方式三：MCP server
+### 方式四：MCP server
 
 **尚未实现。** `cordis.example.yml` 里的 `mcp-readvideo` 条目是占位，留着是为了记住
 这条路要走 `@deepseek-ai/dsh-mcp-client`、且 `serverName` 得匹配 `[A-Za-z0-9_-]{1,32}`。
@@ -152,10 +175,10 @@ dsh --profile web --patch "<cordis.local.yml 的绝对路径>"                 #
 | `1 entry did not activate` + `failed to import` | 插件目录没有 `node_modules` | `npm install` |
 | `schema.required is not supported by the value schema DSL` | `output.schema` 的 object 层写了 `required: [...]` 数组 | 删掉，改成标在属性上 `required: true` |
 | `patch: entry "x" not found` | 用了裸 patch 条目 | 包进 `- insert:` |
-| 完全没日志、静默不生效 | `name` 写了相对路径 | 改成绝对路径 |
+| 完全没日志、静默不生效 | `name` 写了相对路径 | 改成绝对路径（路径指向不存在的文件时，dsh 会明确报 `did not activate`，可据此判定） |
 | `'pnpm' 不是内部或外部命令` | 没装 pnpm（桌面应用自带一份，CLI 走 PATH 找不到） | 先用 `--patch` |
 | 装好后 import 报 `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING` | 包入口指向 `.ts`，而 Node 不剥 `node_modules` 下文件的类型 | 入口用 `dist/index.js`（见上面那节） |
-| `pnpm add` 报成功，但 `node_modules/<包名>` 不存在、包名解析不到 | 桌面应用自带的 pnpm 11.7.0 不建链接 | 见下节 |
+| 按钮填 GitHub 地址后报 `Host key verification failed` / `Connection reset ... port 22` | pnpm 把 GitHub spec 一律解析成 `git+ssh://git@github.com/...`，而机器上没有 SSH key | 改用包名安装（见「发布到 npm」），别用仓库地址 |
 
 `required` 那条值得单独说：它不是数组，而是标在**每个属性自己的 schema 上**
 （`required: true`）。`parameters` 和 `output.schema` 用的是同一套 DSL。
@@ -165,34 +188,53 @@ dsh --profile web --patch "<cordis.local.yml 的绝对路径>"                 #
 ## 「添加插件」按钮
 
 桌面应用里那个「输入插件的包名、GitHub 仓库地址或本地目录路径」的按钮走的是
-`@deepseek-ai/dsh-plugin-manager`。三种来源最后都落到 `pnpm add <spec>`；装完它会读包里的
-`dsh.bundle.patch`，自动往 profile 写挂载条目，不需要手写 `cordis.patch.yml`。本地目录
-那一栏必须是绝对路径 —— 相对路径会被拒，因为"相对 profile 解析会指到 profile 内部去"。
+`@deepseek-ai/dsh-plugin-manager`。三种来源最后都落到 `pnpm add <spec>`，装完把包加进
+profile 的 `dsh.profile.bundles`；包里的 `dsh.bundle.patch` 随 bundle 层自动生效，所以
+**不需要写 profile 的 `cordis.patch.yml`**（实测装完 `dsh-mnemon` 后用户的 patch 文件
+一个字节没变）。本地目录那一栏必须是绝对路径 —— 相对路径会被拒。
 
-**目前在这个项目上它还用不了**，两个独立的卡点：
+三种来源的实测结论：
 
-1. **桌面应用自带的 pnpm 11.7.0 不建链接。**
+| 来源 | 能不能装上 | 说明 |
+| --- | --- | --- |
+| **包名**（如 `dsh-mnemon`） | 能 | 走 `pnpm add <名>`，装完 `node_modules/<包名>` 正常生成。本仓库发到 npm 后即可用 `dsh-readvideo` |
+| **GitHub 仓库地址** | 不能（默认机器） | `github:user/repo`、`https://github.com/...`、`git+https://...git` 三种写法都被 pnpm 改写成 `git+ssh://git@github.com/...`，没配 SSH key 直接 `Host key verification failed` / `Connection reset ... port 22`。本机 `git config --global` 无 `insteadOf` 规则，不是本地配置造成的 |
+| **本地目录（绝对路径）** | 能，但该目录要先 `npm install` | 走 `pnpm add <路径>`，插件用自己的 `node_modules` 解析 `@deepseek-ai/*` |
 
-   ```
-   $ pnpm add zod
-   + zod 4.6.7     (Done)
-   $ node -e "require.resolve('zod')"
-   MODULE_NOT_FOUND
-   ```
+**早前这一节写过两条错的，一并更正**：桌面自带的 pnpm 11.7.0 **会**正常建链接
+（`pnpm add zod` → `node_modules/zod` 存在且 `require.resolve` 通过，实测复现不了"不建链接"）；
+`pnpmCommand` 也**救不了** GitHub 那条路 —— 官方文档写明应用拥有的 profile「由启动器提供
+内置包管理器调用方式，**它优先于 `pnpmCommand`**」，且「Desktop 包管理操作仍由 Desktop shell 负责」。
 
-   包装进了 `node_modules/.pnpm/` 的虚拟 store，`node_modules/<包名>` 那条链接却没有；
-   再跑一次 `pnpm install` 会回 "Already up to date"。换 pnpm 10.34.7 跑同一条命令就正常：
-   `node_modules/zod -> .pnpm/zod@4.6.7/node_modules/zod`。
+一句话：**按钮只对「包名」和「本地绝对路径」这两种来源可用**。想让别人输一个名字就装上，
+就得发到 npm。
 
-   在干净目录、零配置、普通 registry 包上都能复现，所以和 dsh、和包来源都无关。原因没查到
-   底 —— pnpm 自己不报错，也不是权限问题（同一目录里 Node 手动建 symlink / junction 都成功）。
-   插件管理器允许换 pnpm，配置项是 `pnpmCommand`（"pnpm executable name or path; resolved
-   through `PATH`"）；给它指一个 pnpm 10 的包装脚本即可。
+---
 
-2. **`.ts` 入口装进 `node_modules` 后加载不了**（见「入口为什么分 `src` 与 `dist`」）。
-   这一条仓库里已经改好：包入口是 `dist/index.js`。
+## 发布到 npm
 
-所以：想用按钮，先把 `pnpmCommand` 换到 pnpm 10；在那之前继续用 `--patch`。
+包名就是安装名 —— 用户在插件页输入的字符串就是 npm 包名，所以让它能被 `dsh-readvideo`
+装出来，要满足四件事：
+
+1. `package.json` 里 `dsh.bundle.patch` 指向 `cordis.patch.yml`，其中的 `- insert:` 行用
+   **包名**引用自己（不是绝对路径）；
+2. `files` 必须含编译产物 `dist/` —— 安装 npm 包时**不会**跑 `prepare`，编译产物要自带；
+3. `publishConfig.access = "public"`（否则不会被当成公开包）；
+4. **peer 区间要能覆盖 dsh 的 rc 版本**：写成 `^0.1.7-rc.2 || ^0.2.0-rc.1` 这种形式。
+   装之前管理器会做一次 peer 兼容性检查，写死成 `0.2.0-rc.2` 的话，dsh 一升级别人就装不上了
+   —— 这是"别人装不上"最常见的原因。
+
+发布：
+
+```bash
+npm login --registry https://registry.npmjs.org        # 或 export NODE_AUTH_TOKEN=<token>
+npm publish --registry https://registry.npmjs.org
+npm view dsh-readvideo version                         # 回读核对；npmmirror 随后自动同步
+```
+
+参照 `dsh-mnemon`（同架构、70 个版本）：它是 monorepo，用 changesets 管版本，CI 里
+`NODE_AUTH_TOKEN` 逐层发布子包、**最后**发主包，并且每步都从 registry 装回来做 E2E 自检。
+本项目是单包，上面四步就够。
 
 ---
 

@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis';
-export declare const name = "dsh-read-video";
+export declare const name = "dsh-readvideo";
 /** 依赖的服务槽：框架会先备好 ctx.tools，再调用 apply */
 export declare const inject: string[];
 export interface Config {
