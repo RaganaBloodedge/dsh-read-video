@@ -1,0 +1,21 @@
+# 依赖
+node_modules/
+
+# 本机工作区记忆（内部材料，不进仓库）
+.workbuddy/
+
+# spike 的运行产物：每次跑都会重新生成
+spike/out/
+
+# 本机专属挂载清单。dsh 要求 name 用绝对路径，写死了就换不了机器，
+# 所以模板单独放 cordis.example.yml，真实清单不入库。
+cordis.yml
+
+# 运行时缓存
+.read-video-cache/
+
+# 杂项
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
