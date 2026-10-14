@@ -28,6 +28,8 @@
     # 前提：本仓库要先 `npm install` —— dsh 不会把 @deepseek-ai/* 解析到自己
     #       的安装目录，插件必须自带 node_modules。
     - id: read-video
+      # 本地开发指向 src/index.ts（在 node_modules 之外，Node 能直接剥类型）；
+      # 装进 node_modules 的场景只能加载 .js，此时用 <REPO>/dist/index.js。
       name: "<REPO>/src/index.ts"
       config:
         ffmpegPath: null      # 留空 = 自动发现

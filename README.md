@@ -93,6 +93,28 @@ npm install
 `read-video: failed to import` —— 真原因得单独 import 才看得到，是
 `ERR_MODULE_NOT_FOUND: Cannot find package '@deepseek-ai/dsh-tools'`。
 
+`npm install` 会顺带跑 `prepare`（即 `tsc`），产出 `dist/`。
+
+### 入口为什么分 `src` 与 `dist`
+
+dsh 当年加载插件入口时走的是 Node 的类型剥离，而 **Node 拒绝对 `node_modules` 下的
+`.ts` 文件剥类型**：
+
+```
+ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING
+Stripping types is currently unsupported for files under node_modules
+```
+
+于是两条路分开：
+
+| 加载方式 | 入口 | 原因 |
+| --- | --- | --- |
+| 本地开发 `--patch` | `src/index.ts` | 文件在 `node_modules` 之外，Node 能直接剥类型，不用先编译 |
+| 装进 `node_modules`（包名 / GitHub 仓库 / 本地目录） | `dist/index.js` | 只能加载 `.js`，所以包入口是 `dist/index.js` |
+
+`dist/` 进了仓库，所以从 GitHub 装下来不用自己编译也能跑；`prepare` 脚本则在
+`npm install` 和 git 依赖场景下重新生成一份。两条都留着是为了少一个失败点。
+
 ### 方式一：桌面应用
 
 把 `cordis.example.yml` 里的 `- insert:` 块粘进
@@ -132,9 +154,45 @@ dsh --profile web --patch "<cordis.local.yml 的绝对路径>"                 #
 | `patch: entry "x" not found` | 用了裸 patch 条目 | 包进 `- insert:` |
 | 完全没日志、静默不生效 | `name` 写了相对路径 | 改成绝对路径 |
 | `'pnpm' 不是内部或外部命令` | 没装 pnpm（桌面应用自带一份，CLI 走 PATH 找不到） | 先用 `--patch` |
+| 装好后 import 报 `ERR_UNSUPPORTED_NODE_MODULES_TYPE_STRIPPING` | 包入口指向 `.ts`，而 Node 不剥 `node_modules` 下文件的类型 | 入口用 `dist/index.js`（见上面那节） |
+| `pnpm add` 报成功，但 `node_modules/<包名>` 不存在、包名解析不到 | 桌面应用自带的 pnpm 11.7.0 不建链接 | 见下节 |
 
 `required` 那条值得单独说：它不是数组，而是标在**每个属性自己的 schema 上**
 （`required: true`）。`parameters` 和 `output.schema` 用的是同一套 DSL。
+
+---
+
+## 「添加插件」按钮
+
+桌面应用里那个「输入插件的包名、GitHub 仓库地址或本地目录路径」的按钮走的是
+`@deepseek-ai/dsh-plugin-manager`。三种来源最后都落到 `pnpm add <spec>`；装完它会读包里的
+`dsh.bundle.patch`，自动往 profile 写挂载条目，不需要手写 `cordis.patch.yml`。本地目录
+那一栏必须是绝对路径 —— 相对路径会被拒，因为"相对 profile 解析会指到 profile 内部去"。
+
+**目前在这个项目上它还用不了**，两个独立的卡点：
+
+1. **桌面应用自带的 pnpm 11.7.0 不建链接。**
+
+   ```
+   $ pnpm add zod
+   + zod 4.6.7     (Done)
+   $ node -e "require.resolve('zod')"
+   MODULE_NOT_FOUND
+   ```
+
+   包装进了 `node_modules/.pnpm/` 的虚拟 store，`node_modules/<包名>` 那条链接却没有；
+   再跑一次 `pnpm install` 会回 "Already up to date"。换 pnpm 10.34.7 跑同一条命令就正常：
+   `node_modules/zod -> .pnpm/zod@4.6.7/node_modules/zod`。
+
+   在干净目录、零配置、普通 registry 包上都能复现，所以和 dsh、和包来源都无关。原因没查到
+   底 —— pnpm 自己不报错，也不是权限问题（同一目录里 Node 手动建 symlink / junction 都成功）。
+   插件管理器允许换 pnpm，配置项是 `pnpmCommand`（"pnpm executable name or path; resolved
+   through `PATH`"）；给它指一个 pnpm 10 的包装脚本即可。
+
+2. **`.ts` 入口装进 `node_modules` 后加载不了**（见「入口为什么分 `src` 与 `dist`」）。
+   这一条仓库里已经改好：包入口是 `dist/index.js`。
+
+所以：想用按钮，先把 `pnpmCommand` 换到 pnpm 10；在那之前继续用 `--patch`。
 
 ---
 
@@ -142,6 +200,8 @@ dsh --profile web --patch "<cordis.local.yml 的绝对路径>"                 #
 
 ```
 src/index.ts               插件入口，具名导出 name / inject / apply
+dist/                      编译产物；装进 node_modules 时加载的是这里
+tsconfig.json              erasableSyntaxOnly，保证源码也能被 Node 直接剥类型加载
 cordis.patch.yml           发布用 bundle 层，用户 profile 里引用包名
 cordis.example.yml         挂载清单模板（dsh 要求绝对路径，所以只能给模板）
 spike/remote_seek_spike.py 可行性验证：量出远程 seek 实际拉了多少字节
